@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# MERN Book Management Commit-Msg Hook: Enforce Conventional Commits specification
+COMMIT_MSG_FILE="$1"
+FIRST_LINE=$(head -n 1 "$COMMIT_MSG_FILE")
+
+# Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+PATTERN="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_-]+\))?: .+"
+
+# Allow automatic merge and revert commits
+if echo "$FIRST_LINE" | grep -qE "^(Merge branch|Merge pull request|Revert \")"; then
+  exit 0
+fi
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+  echo "❌ [commit-msg ERROR] Invalid commit message format: \"$FIRST_LINE\"" >&2
+  echo "Commit messages must follow the Conventional Commits specification:" >&2
+  echo "  <type>(<optional-scope>): <description>" >&2
+  echo "Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert" >&2
+  echo "Example: feat(db): add Atlas connection pooling and health endpoint" >&2
+  exit 1
+fi
+
+echo "✅ [commit-msg] Format valid: $FIRST_LINE"
+exit 0

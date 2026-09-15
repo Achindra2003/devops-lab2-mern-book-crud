@@ -1,0 +1,36 @@
+#!/usr/bin/env sh
+# MERN Book Management Pre-commit Hook
+# DevOps Governance: Secret Leak Prevention & Conflict Marker Blocker
+
+echo "[pre-commit] Running security and integrity pre-commit checks..."
+
+# 1. Block staged .env files
+STAGED_ENV=$(git diff --cached --name-only | grep -E "(^|/)\.env(\..+)?$" | grep -v "\.env\.example" || true)
+if [ -n "$STAGED_ENV" ]; then
+  echo "❌ [pre-commit SECURITY ERROR] Attempting to commit environment secret files:" >&2
+  echo "$STAGED_ENV" >&2
+  echo "Environment files contain sensitive secrets and must NEVER be committed to Git." >&2
+  echo "Please unstage with: git reset HEAD <file>" >&2
+  exit 1
+fi
+
+# 2. Block raw unmasked connection strings with passwords in staged files
+STAGED_SECRETS=$(git diff --cached -U0 | grep -E "^\+.*mongodb(\+srv)?:\/\/[a-zA-Z0-9_-]+:[^@]+@" | grep -v -E "<(username|password)>" || true)
+if [ -n "$STAGED_SECRETS" ]; then
+  echo "❌ [pre-commit SECURITY ERROR] Detected unmasked database credentials in staged changes:" >&2
+  echo "$STAGED_SECRETS" >&2
+  echo "Store database credentials in your local .env file and use process.env.MONGO_URI." >&2
+  exit 1
+fi
+
+# 3. Check for lingering conflict markers
+CONFLICT_MARKERS=$(git diff --cached -U0 | grep -E "^(\+<<<<<<<|\+=======|\+>>>>>>>)" || true)
+if [ -n "$CONFLICT_MARKERS" ]; then
+  echo "❌ [pre-commit ERROR] Staged changes contain unresolved merge conflict markers:" >&2
+  echo "$CONFLICT_MARKERS" >&2
+  echo "Please resolve all conflict markers before committing." >&2
+  exit 1
+fi
+
+echo "✅ [pre-commit] All pre-commit security and integrity checks passed!"
+exit 0

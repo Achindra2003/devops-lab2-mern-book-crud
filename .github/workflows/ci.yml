@@ -1,0 +1,95 @@
+name: MERN Book CRUD CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  backend-ci:
+    name: Backend Syntax & Configuration Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Validate Server & Module Syntax
+        run: |
+          node --check server.js
+          node --check config/db.js
+          node --check controllers/authController.js
+          node --check controllers/bookController.js
+          node --check middleware/authMiddleware.js
+          node --check routes/authRoutes.js
+          node --check routes/bookRoutes.js
+          node --check scripts/seed.js
+
+      - name: Verify Environment Example Integrity
+        run: |
+          test -f .env.example || (echo "Missing .env.example" && exit 1)
+          grep -q "MONGO_URI=" .env.example || (echo "Missing MONGO_URI in .env.example" && exit 1)
+
+  frontend-ci:
+    name: Frontend Lint & Production Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run Vite Production Build
+        run: npm run build
+
+  security-scan:
+    name: DevOps Secret Leak & Hygiene Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Verify No Secrets Stored in Git
+        run: |
+          echo "Scanning for accidental secret commits..."
+          if find . -name "*.env" -not -name "*.env.example" | grep -q .; then
+            echo "ERROR: Found committed .env file!"
+            find . -name "*.env" -not -name "*.env.example"
+            exit 1
+          fi
+          echo "No .env secret files found in repository."
+
+      - name: Scan for Lingering Conflict Markers
+        run: |
+          if grep -rE "^(<<<<<<<|=======|>>>>>>>)" --exclude-dir={node_modules,.git,dist} .; then
+            echo "ERROR: Unresolved merge conflict markers detected!"
+            exit 1
+          fi
+          echo "Zero merge conflict markers found."
